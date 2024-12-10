@@ -1,0 +1,40 @@
+# Android Studio specific
+.idea/
+*.iml
+.gradle/
+local.properties
+
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle-wrapper.jar
+
+# Android specific
+/captures/
+/output.json
+
+# Generated files
+*.apk
+*.ap_
+*.dex
+*.class
+*.so
+*.log
+*.zip
+*.jar
+*.war
+*.ear
+
+# Proguard
+proguard/
+proguard-rules.pro
+
+# NDK
+obj/
+libs/
+
+# IntelliJ specific
+*.iws
+*.ipr
+/out/
