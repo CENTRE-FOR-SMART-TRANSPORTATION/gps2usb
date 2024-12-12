@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log; // Import for logging
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -85,6 +86,8 @@ public class MainActivity extends AppCompatActivity {
         private void handleSerialInput(String input) {
             runOnUiThread(() -> {
                 appendLog("Received from Serial: " + input);
+                // saves the input in the csv too
+                saveDebugLogToFile(getCurrentTimestamp(),input,"");
 
 //                if (input.equalsIgnoreCase("stop")) {
 //                    if (locationUpdatesEnabled) {
@@ -113,6 +116,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
 
         coordinatesTextView = findViewById(R.id.coordinatesTextView);
@@ -157,6 +161,14 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        // Allow the screen to sleep
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
 
 
     private void requestLocationPermission() {
