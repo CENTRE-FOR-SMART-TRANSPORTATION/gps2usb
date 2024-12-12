@@ -1,5 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <color name="background_color">#F9F9F9</color>
+    <color name="primary_text">#333333</color>
+    <color name="secondary_text">#666666</color>
+    <color name="button_color">#6200EE</color>
+    <color name="button_text">#FFFFFF</color>
+    <color name="button_background">#000000</color> <!-- Purple button background -->
+    <color name="button_ripple">#666666</color> <!-- Light purple ripple -->
 </resources>

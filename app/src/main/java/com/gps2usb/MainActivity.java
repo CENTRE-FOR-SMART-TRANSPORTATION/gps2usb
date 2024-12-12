@@ -2,18 +2,22 @@ package com.gps2usb;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.hardware.usb.UsbDeviceConnection;
 import android.location.Location;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log; // Import for logging
 import android.view.View;
+import android.widget.Button;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
@@ -51,7 +55,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView coordinatesTextView;
     private FusedLocationProviderClient fusedLocationClient;
     private LocationCallback locationCallback;
-    private TextView logTextView, GPSstatus;
+    private TextView logTextView;
+    private Button sendFile, newFile;
     private final StringBuilder serialBuffer = new StringBuilder();
     // Serial listener
     private final SerialInputOutputManager.Listener usbListener = new SerialInputOutputManager.Listener() {
@@ -77,6 +82,18 @@ public class MainActivity extends AppCompatActivity {
                 serialBuffer.setLength(0);
             }
         }
+        private void handleSerialInput(String input) {
+            runOnUiThread(() -> {
+                appendLog("Received from Serial: " + input);
+
+//                if (input.equalsIgnoreCase("stop")) {
+//                    if (locationUpdatesEnabled) {
+//                        locationUpdatesEnabled = false;
+//                        appendLog("Received stop command, disabling location updates");
+//                    }
+//                }
+            });
+        }
 
         @Override
         public void onRunError(Exception e) {
@@ -100,9 +117,8 @@ public class MainActivity extends AppCompatActivity {
 
         coordinatesTextView = findViewById(R.id.coordinatesTextView);
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-        GPSstatus = findViewById(R.id.StatusGPS);
         logTextView = findViewById(R.id.logTextView);
-
+        sendFile = findViewById(R.id.shareLogFile);
         locationCallback = new LocationCallback() {
             @Override
             public void onLocationResult(LocationResult locationResult) {
@@ -124,6 +140,21 @@ public class MainActivity extends AppCompatActivity {
         // Setup USB serial communication
         setupUsbSerial();
         appendLog("Started sending location updates by default.");
+
+        sendFile.setOnClickListener(v -> {
+            File cacheDir = getCacheDir();
+            File[] logFiles = cacheDir.listFiles();
+            for (File file : logFiles) {
+                Log.d("LogFileSelection", "Found file: " + file.getName());
+            }
+            if (logFiles != null && logFiles.length > 0) {
+                LogFileSelectionFragment fragment = new LogFileSelectionFragment(this, logFiles);
+                fragment.show(getSupportFragmentManager(), "LogFileSelectionFragment");
+            } else {
+                Toast.makeText(this, "No log files found", Toast.LENGTH_SHORT).show();
+            }
+        });
+
     }
 
 
@@ -153,10 +184,8 @@ public class MainActivity extends AppCompatActivity {
                 public void onSuccess(Location location) {
                     if (location != null) {
                         updateLocationDisplay(location);
-                        GPSstatus.setText("Status : Signal Available");
                     } else {
                         coordinatesTextView.setText("Waiting for location...");
-                        GPSstatus.setText("Status : No Signal");
                     }
                 }
             });
@@ -199,23 +228,12 @@ public class MainActivity extends AppCompatActivity {
             closePort();
         }
     }
-    private void handleSerialInput(String input) {
-        runOnUiThread(() -> {
-            appendLog("Received from Serial: " + input);
 
-            if (input.equalsIgnoreCase("stop")) {
-                if (locationUpdatesEnabled) {
-                    locationUpdatesEnabled = false;
-                    appendLog("Received stop command, disabling location updates");
-                }
-            }
-        });
-    }
 
     private void updateLocationDisplay(Location location) {
         double latitude = location.getLatitude();
         double longitude = location.getLongitude();
-        String locationText = "Latitude: " + latitude + "\nLongitude: " + longitude;
+        String locationText = "Lat: " + latitude + "\nLon: " + longitude;
         coordinatesTextView.setText(locationText);
 
         // Log GPS coordinates
@@ -232,16 +250,19 @@ public class MainActivity extends AppCompatActivity {
 
                 // Append the log
                 appendLog("Location updated: " + locationText);
+
             } catch (IOException e) {
                 e.printStackTrace();
                 Toast.makeText(this, "Error writing to port", Toast.LENGTH_SHORT).show();
                 Log.e(TAG, "Error writing GPS data to USB port", e);
             }
         } else {
+            appendLog("Port Not Found: " + locationText);
+
             Log.d("port", "Port not found");
         }
+        saveDebugLogToFile(getCurrentTimestamp(), ""+latitude,""+longitude);
     }
-
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -279,9 +300,66 @@ public class MainActivity extends AppCompatActivity {
 
         // Append message to logTextView
         logTextView.append(logMessage);
+//        saveDebugLogToFile(message);
 
         // Scroll to the bottom of the ScrollView
         ScrollView scrollView = findViewById(R.id.LogGPS);
         scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
     }
+
+    private void saveDebugLogToFile(String timestamp, String latitude, String longitude) {
+        // Generate the file name dynamically based on the current date
+        String fileName = getCurrentDate() + ".csv";
+
+        // Get the cache directory
+        java.io.File cacheDir = getApplicationContext().getCacheDir();
+        java.io.File logFile = new java.io.File(cacheDir, fileName);
+
+        // Log to ensure the cache directory exists
+        if (!cacheDir.exists()) {
+            Log.e("MainActivity", "Cache directory does not exist. Trying to create it...");
+            if (!cacheDir.mkdirs()) {
+                Log.e("MainActivity", "Failed to create cache directory.");
+                return; // Abort if the directory couldn't be created
+            }
+        }
+
+        Log.d("MainActivity", "Cache directory path: " + cacheDir.getAbsolutePath());
+
+        try (FileWriter fw = new FileWriter(logFile, true)) { // 'true' for append mode
+            // Check if the file is empty (add header row only once)
+            if (logFile.length() == 0) {
+                fw.write("timestamp,latitude,longitude\n"); // Write CSV header
+            }
+
+            // Write the new log entry
+            String csvEntry = timestamp + "," + latitude + "," + longitude + "\n";
+            fw.write(csvEntry);
+            fw.flush();
+
+            Log.d("MainActivity", "CSV log saved/updated in cache directory: " + logFile.getAbsolutePath());
+        } catch (IOException e) {
+            Log.e("MainActivity", "Failed to save/update CSV log in cache directory: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    // Helper method to get the current date in YYYY-MM-DD format
+    private String getCurrentDate() {
+        java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault());
+        return dateFormat.format(new java.util.Date());
+    }
+
+    // Helper method to get the current timestamp in HH:mm:ss format
+    private String getCurrentTimestamp() {
+        java.text.SimpleDateFormat timeFormat = new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault());
+        return timeFormat.format(new java.util.Date());
+    }
+
+
+
+
+
+
+
 }
